@@ -1,11 +1,1 @@
-{
-    "status": "READY",
-    "type": "",
-    "entry_price": 0,
-    "tp1": 0,
-    "tp2": 0,
-    "sl": 0,
-    "tp1_hit": false,
-    "source": "",
-    "owner": "DARK-X-RAYHAN"
-}
+{"status": "READY", "type": "", "entry_price": 0, "tp2": 0, "sl": 0}
