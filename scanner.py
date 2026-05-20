@@ -1,133 +1,100 @@
 import os
 import json
-import time
 import requests
+import pandas as pd
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import threading
 
-# ---- কনফিগারেশন ----
 BOT_TOKEN = "8772565875:AAHyDH-063rlJoEoO5vvrEVnUtRQoTsHIdA"
 CHAT_ID = "-1003833319917"
 OWNER = "DARK-X-RAYHAN"
-DB_FILE = "database.json"
 
-# ডাটাবেজ ফাইল চেক ও তৈরি
-if not os.path.exists(DB_FILE):
-    with open(DB_FILE, "w") as f:
-        json.dump({"status": "READY", "type": "", "entry_price": 0, "tp2": 0, "sl": 0}, f)
-
-def send_telegram(message):
+def send_telegram_alert(action, entry, sl, tp):
+    status_emoji = "🟢" if action == "BUY" else "🔴"
+    message = (
+        f"{status_emoji} *NEW GOLD PRECISION SIGNAL*\n\n"
+        f"📊 *Direction:* `{action}`\n"
+        f"⚡ *Entry Price:* ${entry:.2f}\n"
+        f"🎯 *Target TP:* ${tp:.2f}\n"
+        f"🛑 *Stop Loss:* ${sl:.2f}\n\n"
+        f"👤 *Developer:* {OWNER}"
+    )
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    try: requests.post(url, json={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"})
-    except: pass
-
-def get_gold_price():
     try:
-        res = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=gold&vs_currencies=usd").json()
-        return res['gold']['usd']
-    except: return 0
+        requests.post(url, json={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"})
+    except Exception as e:
+        print(f"Telegram automation error: {e}")
 
-# =================================================================
-# রেন্ডার ওয়েব সার্ভার (লিংকে ঢুকলে চার্ট দেখাবে এবং ট্রেডিংভিউ থেকে ডেটা নেবে)
-# =================================================================
-class WebServerHandler(BaseHTTPRequestHandler):
+# আপনার মূল ফাইলের লজিক একটুও না পরিবর্তন করে পাইথনে রূপান্তর করা হলো
+def run_gold_indicator_logic(df):
+    if len(df) < 50:
+        return
     
-    # আপনি যখন লিংকে ঢুকবেন (GET), তখন এই ফাংশনটি index.html চার্ট পেজটি লোড করবে
+    # আপনার মূল ইনপুট সেটিংস ও লজিক
+    df['ema_fast'] = df['close'].ewm(span=20, adjust=False).mean() # ta.ema(close, 20)
+    df['ema_slow'] = df['close'].ewm(span=50, adjust=False).mean() # ta.ema(close, 50)
+    df['high_signal'] = df['high'].rolling(window=10).max()        # ta.highest(high, 10)
+    df['low_signal'] = df['low'].rolling(window=10).min()          # ta.lowest(low, 10)
+    
+    # ATR 14 ক্যালকুলেশন
+    high_low = df['high'] - df['low']
+    high_cp = (df['high'] - df['close'].shift(1)).abs()
+    low_cp = (df['low'] - df['close'].shift(1)).abs()
+    tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
+    df['atr'] = tr.rolling(window=14).mean()
+    
+    # নো-রিপেইন্ট লক করার জন্য লাস্ট ক্লোজড ক্যান্ডেল ইনডেক্স (-2)
+    p = -2
+    
+    # আপনার অরিজিনাল বাই এবং সেল কন্ডিশন
+    buy_condition = (df['ema_fast'].iloc[p-1] <= df['ema_slow'].iloc[p-1]) and \
+                    (df['ema_fast'].iloc[p] > df['ema_slow'].iloc[p]) and \
+                    (df['close'].iloc[p] > df['high_signal'].iloc[p-1])
+                    
+    sell_condition = (df['ema_fast'].iloc[p-1] >= df['ema_slow'].iloc[p-1]) and \
+                     (df['ema_fast'].iloc[p] < df['ema_slow'].iloc[p]) and \
+                     (df['close'].iloc[p] < df['low_signal'].iloc[p-1])
+                     
+    if buy_condition:
+        entry = df['close'].iloc[p]
+        sl = entry - (df['atr'].iloc[p] * 1.5) # slMultiplier = 1.5
+        tp = entry + (df['atr'].iloc[p] * 2.0) # tpMultiplier = 2.0
+        send_telegram_alert("BUY", entry, sl, tp)
+        
+    elif sell_condition:
+        entry = df['close'].iloc[p]
+        sl = entry + (df['atr'].iloc[p] * 1.5) # slMultiplier = 1.5
+        tp = entry - (df['atr'].iloc[p] * 2.0) # tpMultiplier = 2.0
+        send_telegram_alert("SELL", entry, sl, tp)
+
+class RenderServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             with open("index.html", "r", encoding="utf-8") as f:
-                html_content = f.read()
+                html_data = f.read()
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            self.wfile.write(html_content.encode("utf-8"))
+            self.wfile.write(html_data.encode("utf-8"))
         except Exception as e:
             self.send_response(500)
             self.end_headers()
-            self.wfile.write(f"Error loading dashboard: {e}".encode())
+            self.wfile.write(f"Error: {e}".encode())
 
-    # ট্রেডিংভিউ অ্যালার্ট ব্যাকগ্রাউন্ডে ডেটা পাঠালে (POST) এই ফাংশনটি কাজ করবে
     def do_POST(self):
+        # আপনার লাইভ ডাটা সোর্স (যেমন MT4/MT5 বা API) থেকে ক্যান্ডেল ডেটা রিসিভ করার জায়গা
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length).decode('utf-8')
-        
-        with open(DB_FILE, "r") as f:
-            db_data = json.load(f)
-            
-        if db_data["status"] == "RUNNING":
+        try:
+            json_data = json.loads(post_data)
+            if "candles" in json_data:
+                df = pd.DataFrame(json_data["candles"])
+                run_gold_indicator_logic(df)
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"Locked. Trade is currently running.")
-            return
-
-        current_price = get_gold_price()
-        if current_price == 0:
-            self.send_response(500)
+        except:
+            self.send_response(400)
             self.end_headers()
-            return
-
-        signal_type = "SELL" if "sell" in post_data.lower() else "BUY"
-        timeframe = "5m" if "5m" in post_data.lower() else "3m"
-
-        # ২০ পিপস TP, ৩০ পিপস SL অটো ক্যালকুলেশন
-        if signal_type == "BUY":
-            tp1, tp2, sl = current_price + 2.0, current_price + 4.0, current_price - 3.0
-        else:
-            tp1, tp2, sl = current_price - 2.0, current_price - 4.0, current_price + 3.0
-
-        # ডাটাবেজে লক করা
-        db_data = {"status": "RUNNING", "type": signal_type, "entry_price": current_price, "tp2": tp2, "sl": sl}
-        with open(DB_FILE, "w") as f: json.dump(db_data, f)
-
-        # টেলিগ্রামে সিগন্যাল পাঠানো
-        msg = f"🔔 *NEW GOLD SMART MONEY SIGNAL*\n\n" \
-              f"📊 Strategy: `SMC Approved`\n" \
-              f"⏱ Timeframe: `{timeframe}`\n" \
-              f"Direction: `{signal_type}`\n\n" \
-              f"Entry Price: ${current_price}\n" \
-              f"🎯 TP1: ${tp1}\n" \
-              f"🎯 TP2: ${tp2}\n" \
-              f"🛑 SL: ${sl}\n\n" \
-              f"Owner: {OWNER}"
-        send_telegram(msg)
-
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Signal Processed Successfully.")
-
-# অনবরত লাইভ মার্কেট ট্র্যাক করার ব্যাকগ্রাউন্ড লুপ
-def track_tp_sl():
-    while True:
-        try:
-            with open(DB_FILE, "r") as f:
-                db_data = json.load(f)
-                
-            if db_data["status"] == "RUNNING":
-                current_price = get_gold_price()
-                if current_price > 0:
-                    tp2, sl, side = db_data["tp2"], db_data["sl"], db_data["type"]
-                    
-                    if side == "BUY":
-                        if current_price >= tp2:
-                            send_telegram(f"🎉 *Gold BUY TP2 Hit!*\nPrice: ${current_price}\nOwner: {OWNER}")
-                            with open(DB_FILE, "w") as f: json.dump({"status": "READY", "type": "", "entry_price": 0, "tp2": 0, "sl": 0}, f)
-                        elif current_price <= sl:
-                            send_telegram(f"❌ *Gold BUY SL Hit!*\nPrice: ${current_price}\nOwner: {OWNER}")
-                            with open(DB_FILE, "w") as f: json.dump({"status": "READY", "type": "", "entry_price": 0, "tp2": 0, "sl": 0}, f)
-                    
-                    elif side == "SELL":
-                        if current_price <= tp2:
-                            send_telegram(f"🎉 *Gold SELL TP2 Hit!*\nPrice: ${current_price}\nOwner: {OWNER}")
-                            with open(DB_FILE, "w") as f: json.dump({"status": "READY", "type": "", "entry_price": 0, "tp2": 0, "sl": 0}, f)
-                        elif current_price >= sl:
-                            send_telegram(f"❌ *Gold SELL SL Hit!*\nPrice: ${current_price}\nOwner: {OWNER}")
-                            with open(DB_FILE, "w") as f: json.dump({"status": "READY", "type": "", "entry_price": 0, "tp2": 0, "sl": 0}, f)
-        except: pass
-        time.sleep(10) # প্রতি ১০ সেকেন্ড পর পর প্রাইস চেক করবে
 
 if __name__ == "__main__":
-    threading.Thread(target=track_tp_sl, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), WebServerHandler)
-    print(f"Server started on port {port}...")
-    server.serve_forever()
+    HTTPServer(('0.0.0.0', port), RenderServerHandler).serve_forever()
