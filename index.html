@@ -11,8 +11,9 @@
         .credit { color: #00b4d8; font-weight: bold; font-size: 14px; margin-top: 5px; }
         .chart-container { display: flex; gap: 15px; margin-top: 15px; height: calc(100vh - 100px); }
         .chart-box { flex: 1; border: 2px solid #1e222d; background: #131722; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .custom-chart-frame { width: 100%; height: 100%; border: none; background: #131722; }
+        .tv-widget { width: 100%; height: 100%; }
     </style>
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 </head>
 <body>
     <header>
@@ -21,11 +22,53 @@
     </header>
     <div class="chart-container">
         <div class="chart-box">
-            <div id="chart_3m" class="custom-chart-frame"></div>
+            <div id="tv_chart_3m" class="tv-widget"></div>
         </div>
         <div class="chart-box">
-            <div id="chart_5m" class="custom-chart-frame"></div>
+            <div id="tv_chart_5m" class="tv-widget"></div>
         </div>
     </div>
+
+    <script type="text/javascript">
+        // আপনার অরিজিনাল ইন্ডিকেটর লজিকের গাণিতিক প্যারামিটার (EMA 20, EMA 50 এবং 10 পিরিয়ড হাই/লো উইন্ডো)
+        // এটি চার্ট লোড হওয়ার সাথে সাথে ইন্ডিকেটর লাইনগুলো স্ক্রিনে ফুটিয়ে তুলবে।
+        const goldSMCStudies = [
+            { id: "MAExp@tv-basicstudies", inputs: { length: 20 } }, // ema_fast = ta.ema(close, 20)
+            { id: "MAExp@tv-basicstudies", inputs: { length: 50 } }, // ema_slow = ta.ema(close, 50)
+            { id: "PriceChannel@tv-basicstudies", inputs: { length: 10 } } // high_signal / low_signal
+        ];
+
+        // ৩ মিনিটের লাইভ গোল্ড চার্ট জেনারেটর
+        new TradingView.widget({
+            "container_id": "tv_chart_3m",
+            "autosize": true,
+            "symbol": "FX:XAUUSD", // আপনার আগের অ্যাপেল চেঞ্জ করে এখানে গোল্ড (GOLD) সেট করা হয়েছে
+            "interval": "3",
+            "timezone": "Etc/UTC",
+            "theme": "dark",
+            "style": "1",
+            "locale": "en",
+            "enable_publishing": false,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": true,
+            "studies": goldSMCStudies // আপনার ইন্ডিকেটর এখানে যুক্ত করা হলো
+        });
+
+        // ৫ মিনিটের লাইভ গোল্ড চার্ট জেনারেটর
+        new TradingView.widget({
+            "container_id": "tv_chart_5m",
+            "autosize": true,
+            "symbol": "FX:XAUUSD", // গোল্ড চার্ট
+            "interval": "5",
+            "timezone": "Etc/UTC",
+            "theme": "dark",
+            "style": "1",
+            "locale": "en",
+            "enable_publishing": false,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": true,
+            "studies": goldSMCStudies // আপনার ইন্ডিকেটর এখানে যুক্ত করা হলো
+        });
+    </script>
 </body>
 </html>
