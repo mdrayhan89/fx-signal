@@ -30,19 +30,18 @@
     </div>
 
     <script type="text/javascript">
-        // আপনার অরিজিনাল ইন্ডিকেটর লজিকের গাণিতিক প্যারামিটার (EMA 20, EMA 50 এবং 10 পিরিয়ড হাই/লো উইন্ডো)
-        // এটি চার্ট লোড হওয়ার সাথে সাথে ইন্ডিকেটর লাইনগুলো স্ক্রিনে ফুটিয়ে তুলবে।
+        // আপনার অরিজিনাল ইন্ডিকেটর লজিকের ডিফল্ট স্টাডিজ (EMA 20, EMA 50 এবং 10 পিরিয়ড Price Channel)
         const goldSMCStudies = [
-            { id: "MAExp@tv-basicstudies", inputs: { length: 20 } }, // ema_fast = ta.ema(close, 20)
-            { id: "MAExp@tv-basicstudies", inputs: { length: 50 } }, // ema_slow = ta.ema(close, 50)
-            { id: "PriceChannel@tv-basicstudies", inputs: { length: 10 } } // high_signal / low_signal
+            { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
+            { id: "MAExp@tv-basicstudies", inputs: { length: 50 } },
+            { id: "PriceChannel@tv-basicstudies", inputs: { length: 10 } }
         ];
 
-        // ৩ মিনিটের লাইভ গোল্ড চার্ট জেনারেটর
+        // 3 Minute Live Gold Chart
         new TradingView.widget({
             "container_id": "tv_chart_3m",
             "autosize": true,
-            "symbol": "FX:XAUUSD", // আপনার আগের অ্যাপেল চেঞ্জ করে এখানে গোল্ড (GOLD) সেট করা হয়েছে
+            "symbol": "FX:XAUUSD",
             "interval": "3",
             "timezone": "Etc/UTC",
             "theme": "dark",
@@ -51,14 +50,14 @@
             "enable_publishing": false,
             "hide_side_toolbar": false,
             "allow_symbol_change": true,
-            "studies": goldSMCStudies // আপনার ইন্ডিকেটর এখানে যুক্ত করা হলো
+            "studies": goldSMCStudies
         });
 
-        // ৫ মিনিটের লাইভ গোল্ড চার্ট জেনারেটর
+        // 5 Minute Live Gold Chart
         new TradingView.widget({
             "container_id": "tv_chart_5m",
             "autosize": true,
-            "symbol": "FX:XAUUSD", // গোল্ড চার্ট
+            "symbol": "FX:XAUUSD",
             "interval": "5",
             "timezone": "Etc/UTC",
             "theme": "dark",
@@ -67,7 +66,7 @@
             "enable_publishing": false,
             "hide_side_toolbar": false,
             "allow_symbol_change": true,
-            "studies": goldSMCStudies // আপনার ইন্ডিকেটর এখানে যুক্ত করা হলো
+            "studies": goldSMCStudies
         });
     </script>
 </body>
