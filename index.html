@@ -11,7 +11,7 @@
         .credit { color: #00b4d8; font-weight: bold; font-size: 14px; margin-top: 5px; }
         .chart-container { display: flex; gap: 15px; margin-top: 15px; height: calc(100vh - 100px); }
         .chart-box { flex: 1; border: 2px solid #1e222d; background: #131722; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        iframe { width: 100%; height: 100%; border: none; }
+        .custom-chart-frame { width: 100%; height: 100%; border: none; background: #131722; }
     </style>
 </head>
 <body>
@@ -21,10 +21,10 @@
     </header>
     <div class="chart-container">
         <div class="chart-box">
-            <iframe src="https://s.tradingview.com/widgetembed/?symbol=FX%3AXAUUSD&interval=3&theme=dark"></iframe>
+            <div id="chart_3m" class="custom-chart-frame"></div>
         </div>
         <div class="chart-box">
-            <iframe src="https://s.tradingview.com/widgetembed/?symbol=FX%3AXAUUSD&interval=5&theme=dark"></iframe>
+            <div id="chart_5m" class="custom-chart-frame"></div>
         </div>
     </div>
 </body>
