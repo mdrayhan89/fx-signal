@@ -1,9 +1,9 @@
 import os
 import json
 import requests
-import pandas as pd
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+# টেলিগ্রাম কনফিগারেশন
 BOT_TOKEN = "8772565875:AAHyDH-063rlJoEoO5vvrEVnUtRQoTsHIdA"
 CHAT_ID = "-1003833319917"
 OWNER = "DARK-X-RAYHAN"
@@ -21,51 +21,77 @@ def send_telegram_alert(action, entry, sl, tp):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
         requests.post(url, json={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"})
+        print(f"Signal Sent successfully: {action}")
     except Exception as e:
-        print(f"Telegram Server Sending Error: {e}")
+        print(f"Telegram Sending Error: {e}")
 
-def run_gold_logic(df):
-    if len(df) < 50:
+# পান্ডাস ছাড়া পিওর পাইথনে ইন্ডিকেটর ম্যাথমেটিক্স (EMA, Highest, Lowest, ATR)
+def calculate_ema(data, period):
+    ema = []
+    k = 2 / (period + 1)
+    # প্রথম ভ্যালু সিম্পল অ্যাভারেজ
+    current_ema = sum(data[:period]) / period
+    ema.append(current_ema)
+    for price in data[period:]:
+        current_ema = (price * k) + (current_ema * (1 - k))
+        ema.append(current_ema)
+    # ডেটা লেন্থ ম্যাচ করার জন্য শুরুতে প্যাডিং
+    return [0] * (period - 1) + ema
+
+def process_gold_logic(candles):
+    if len(candles) < 50:
         return
 
-    # ইন্ডিকেটর প্যারামিটার জেনারেট করা
-    df['ema_fast'] = df['close'].ewm(span=20, adjust=False).mean()
-    df['ema_slow'] = df['close'].ewm(span=50, adjust=False).mean()
-    df['high_signal'] = df['high'].rolling(window=10).max()
-    df['low_signal'] = df['low'].rolling(window=10).min()
-    
-    # ATR ক্যালকুলেশন
-    high_low = df['high'] - df['low']
-    high_cp = (df['high'] - df['close'].shift(1)).abs()
-    low_cp = (df['low'] - df['close'].shift(1)).abs()
-    tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
-    df['atr'] = tr.rolling(window=14).mean()
-    
-    # লাস্ট ক্লোজড ক্যান্ডেল পয়েন্ট ফিল্টার (-2)
+    closes = [c['close'] for c in candles]
+    highs = [c['high'] for c in candles]
+    lows = [c['low'] for c in candles]
+
+    # EMA 20 এবং 50 ক্যালকুলেশন
+    ema20 = calculate_ema(closes, 20)
+    ema50 = calculate_ema(closes, 50)
+
+    # ট্রু রেঞ্জ (TR) এবং ATR 14 ক্যালকুলেশন
+    tr_list = []
+    for i in range(len(candles)):
+        if i == 0:
+            tr_list.append(highs[i] - lows[i])
+        else:
+            tr1 = highs[i] - lows[i]
+            tr2 = abs(highs[i] - closes[i-1])
+            tr3 = abs(lows[i] - closes[i-1])
+            tr_list.append(max(tr1, tr2, tr3))
+            
+    # ATR rolling window 14
+    atr = [0] * len(candles)
+    for i in range(13, len(candles)):
+        atr[i] = sum(tr_list[i-13:i+1]) / 14
+
+    # নো-রিপেইন্ট লক ইডেক্স (-2 মানে সর্বশেষ ক্লোজড ক্যান্ডেল)
     p = -2
-    
-    # আপনার কাস্টম কন্ডিশন
-    buy_condition = (df['ema_fast'].iloc[p-1] <= df['ema_slow'].iloc[p-1]) and \
-                    (df['ema_fast'].iloc[p] > df['ema_slow'].iloc[p]) and \
-                    (df['close'].iloc[p] > df['high_signal'].iloc[p-1])
-                    
-    sell_condition = (df['ema_fast'].iloc[p-1] >= df['ema_slow'].iloc[p-1]) and \
-                     (df['ema_fast'].iloc[p] < df['ema_slow'].iloc[p]) and \
-                     (df['close'].iloc[p] < df['low_signal'].iloc[p-1])
-                     
+    p_prev = -3
+
+    # হাইয়েস্ট এবং লোয়েস্ট ১০ ক্যান্ডেল উইন্ডো (high_signal[1] এবং low_signal[1] এর জন্য)
+    # p-1 ইডেক্স থেকে পেছনের ১০টি ক্যান্ডেল ট্র্যাক করা হচ্ছে
+    high_signal_prev = max(highs[p_prev-9:p_prev+1])
+    low_signal_prev = min(lows[p_prev-9:p_prev+1])
+
+    # আপনার অরিজিং ইন্ডিকেটরের বাই/সেল শর্তসমূহ
+    buy_condition = (ema20[p_prev] <= ema50[p_prev]) and (ema20[p] > ema50[p]) and (closes[p] > high_signal_prev)
+    sell_condition = (ema20[p_prev] >= ema50[p_prev]) and (ema20[p] < ema50[p]) and (closes[p] < low_signal_prev)
+
     if buy_condition:
-        entry = df['high_signal'].iloc[p-1] # ফিক্সড রিয়েল এন্ট্রি লেভেল
-        sl = entry - (df['atr'].iloc[p] * 1.5)
-        tp = entry + (df['atr'].iloc[p] * 2.0)
+        entry = high_signal_prev
+        sl = entry - (atr[p] * 1.5)
+        tp = entry + (atr[p] * 2.0)
         send_telegram_alert("BUY", entry, sl, tp)
         
     elif sell_condition:
-        entry = df['low_signal'].iloc[p-1] # ফিক্সড রিয়েল এন্ট্রি লেভেল
-        sl = entry + (df['atr'].iloc[p] * 1.5)
-        tp = entry - (df['atr'].iloc[p] * 2.0)
+        entry = low_signal_prev
+        sl = entry + (atr[p] * 1.5)
+        tp = entry - (atr[p] * 2.0)
         send_telegram_alert("SELL", entry, sl, tp)
 
-class WebServerHandler(BaseHTTPRequestHandler):
+class RenderServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             with open("index.html", "r", encoding="utf-8") as f:
@@ -77,7 +103,7 @@ class WebServerHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_response(500)
             self.end_headers()
-            self.wfile.write(f"Error: {e}".encode())
+            self.wfile.write(f"Dashboard Error: {e}".encode())
 
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
@@ -85,14 +111,14 @@ class WebServerHandler(BaseHTTPRequestHandler):
         try:
             json_data = json.loads(post_data)
             if "candles" in json_data:
-                df = pd.DataFrame(json_data["candles"])
-                run_gold_logic(df)
+                process_gold_logic(json_data["candles"])
             self.send_response(200)
             self.end_headers()
-        except:
+        except Exception as e:
             self.send_response(400)
             self.end_headers()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    HTTPServer(('0.0.0.0', port), WebServerHandler).serve_forever()
+    print(f"Lightweight Auto-Scanner Server Live on Port {port}...")
+    HTTPServer(('0.0.0.0', port), RenderServerHandler).serve_forever()
