@@ -10,7 +10,6 @@ BOT_TOKEN = "8772565875:AAHyDH-063rlJoEoO5vvrEVnUtRQoTsHIdA"
 CHAT_ID = "-1003833319917"
 OWNER = "DARK-X-RAYHAN"
 
-# গ্লোবাল মেমোরি ব্যাংক
 CHART_CANDLES = []
 CHART_MARKERS = []
 LIVE_SIGNALS_CACHE = []
@@ -45,8 +44,8 @@ def run_ai_indicator_engine():
     
     while True:
         try:
-            # গোল্ডের স্পট প্রাইস ট্র্যাকিং ফিড (3 Minute Interval)
-            url = "https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=3m&limit=150"
+            # Binance API থেকে গোল্ড লাইভ ডাটা নেওয়া
+            url = "https://api.binance.com/api/v3/klines?symbol=PAXGUSDT&interval=3m&limit=100"
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 raw_data = response.json()
@@ -64,7 +63,6 @@ def run_ai_indicator_engine():
                 CHART_CANDLES = candles
                 current_candle_time = candles[-1]["time"]
                 
-                # ক্যান্ডেল কনফর্মড হওয়ার পর প্রসেস হবে (No-Repaint)
                 if last_processed_time != current_candle_time:
                     closes = [c['close'] for c in candles]
                     highs = [c['high'] for c in candles]
@@ -73,6 +71,7 @@ def run_ai_indicator_engine():
                     ema20 = calculate_ema(closes, 20)
                     ema50 = calculate_ema(closes, 50)
                     
+                    # ATR লজিক
                     tr = []
                     for i in range(len(candles)):
                         if i == 0: tr.append(highs[i] - lows[i])
@@ -80,7 +79,7 @@ def run_ai_indicator_engine():
                     atr = [0] * len(candles)
                     for i in range(13, len(candles)): atr[i] = sum(tr[i-13:i+1]) / 14
 
-                    p = -2 # কনফর্মড ক্যান্ডেল ইনডেক্স
+                    p = -2 # Confirmed Candle
                     
                     high_signal_prev = max(highs[p-10:p])
                     low_signal_prev = min(lows[p-10:p])
@@ -94,30 +93,30 @@ def run_ai_indicator_engine():
                         sl = entry - (atr[p] * 1.5) if buy_trigger else entry + (atr[p] * 1.5)
                         tp = entry + (atr[p] * 2.0) if buy_trigger else entry - (atr[p] * 2.0)
                         
-                        # ১. সাথে সাথে টেলিগ্রামে সিগন্যাল ফায়ার হবে
+                        # টেলিগ্রামে ইনস্ট্যান্ট অ্যালার্ট পাঠানো
                         send_telegram_alert(action, entry, sl, tp)
                         
-                        # ২. চার্টের ভেতরে ক্যান্ডেলের ওপর লেবেল আঁকার ডাটা তৈরি
+                        # চার্টের ক্যান্ডেলের নিচে/ওপরে মার্কার তৈরি (হুবহু TradingView স্টাইল)
                         marker = {
                             "time": candles[p]["time"],
                             "position": "aboveBar" if action == "SELL" else "belowBar",
                             "color": "#ef5350" if action == "SELL" else "#26a69a",
                             "shape": "arrowDown" if action == "SELL" else "arrowUp",
-                            "text": f"GOLD {action}\\nEntry: {entry:.1f}\\nSL: {sl:.1f}\\nTP: {tp:.1f}"
+                            "text": f"GOLD {action}\\nEntry: ${entry:.2f}\\nSL: ${sl:.2f}\\nTP: ${tp:.2f}"
                         }
                         CHART_MARKERS.append(marker)
                         
-                        # ৩. ডানপাশের হিস্ট্রি বক্সে ডাটা পাঠানো
                         new_sig = {
-                            "action": action, "entry": entry, "sl": sl, "tp": tp
+                            "action": action, "entry": entry, "sl": sl, "tp": tp,
+                            "time": datetime.now().strftime("%I:%M %p")
                         }
                         LIVE_SIGNALS_CACHE.insert(0, new_sig)
                         if len(LIVE_SIGNALS_CACHE) > 10: LIVE_SIGNALS_CACHE.pop()
                     
                     last_processed_time = current_candle_time
         except Exception as e:
-            print(f"Data engine lag: {e}")
-        time.sleep(5)
+            print(f"Data Feed Error: {e}")
+        time.sleep(10)
 
 class ServerEngine(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -125,7 +124,10 @@ class ServerEngine(BaseHTTPRequestHandler):
         if self.path == '/get-market-data':
             self.send_response(200)
             self.send_header("Content-type", "application/json")
+            # CORS পলিসি অন করা যাতে ব্রাউজার ডাটা ব্লক না করে
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
+            
             payload = {
                 "candles": CHART_CANDLES,
                 "markers": CHART_MARKERS,
