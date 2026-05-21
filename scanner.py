@@ -4,7 +4,6 @@ import requests
 import pandas as pd
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# টেলিগ্রাম বট কনফিগারেশন
 BOT_TOKEN = "8772565875:AAHyDH-063rlJoEoO5vvrEVnUtRQoTsHIdA"
 CHAT_ID = "-1003833319917"
 OWNER = "DARK-X-RAYHAN"
@@ -14,7 +13,7 @@ def send_telegram_alert(action, entry, sl, tp):
     message = (
         f"{status_emoji} *NEW GOLD PRECISION SIGNAL*\n\n"
         f"📊 *Direction:* `{action}`\n"
-        f"⚡ *Entry Price:* ${entry:.2f}\n"
+        f"⚡ *Exact Entry Price:* ${entry:.2f}\n"
         f"🎯 *Target TP:* ${tp:.2f}\n"
         f"🛑 *Stop Loss:* ${sl:.2f}\n\n"
         f"👤 *Developer:* {OWNER}"
@@ -23,30 +22,29 @@ def send_telegram_alert(action, entry, sl, tp):
     try:
         requests.post(url, json={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"})
     except Exception as e:
-        print(f"Telegram Notification Error: {e}")
+        print(f"Telegram Server Sending Error: {e}")
 
-# আপনার অরিজিনাল ইন্ডিকেটর লজিক (১% ও পরিবর্তন না করে পাইথনে কনভার্ট করা)
-def process_gold_indicators(df):
+def run_gold_logic(df):
     if len(df) < 50:
         return
 
-    # ইনপুট এবং স্ট্র্যাটেজি প্যারামিটার
-    df['ema_fast'] = df['close'].ewm(span=20, adjust=False).mean()  # ta.ema(close, 20)
-    df['ema_slow'] = df['close'].ewm(span=50, adjust=False).mean()  # ta.ema(close, 50)
-    df['high_signal'] = df['high'].rolling(window=10).max()         # ta.highest(high, 10)
-    df['low_signal'] = df['low'].rolling(window=10).min()           # ta.lowest(low, 10)
+    # ইন্ডিকেটর প্যারামিটার জেনারেট করা
+    df['ema_fast'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['ema_slow'] = df['close'].ewm(span=50, adjust=False).mean()
+    df['high_signal'] = df['high'].rolling(window=10).max()
+    df['low_signal'] = df['low'].rolling(window=10).min()
     
-    # ATR 14 ক্যালকুলেশন (SL/TP এর জন্য)
+    # ATR ক্যালকুলেশন
     high_low = df['high'] - df['low']
     high_cp = (df['high'] - df['close'].shift(1)).abs()
     low_cp = (df['low'] - df['close'].shift(1)).abs()
     tr = pd.concat([high_low, high_cp, low_cp], axis=1).max(axis=1)
-    df['atr'] = tr.rolling(window=14).mean()                        # ta.atr(14)
+    df['atr'] = tr.rolling(window=14).mean()
     
-    # নো-রিপেইন্ট ফিল্টার: ক্যান্ডেল পুরোপুরি ক্লোজ হওয়ার ইনডেক্স (-2)
+    # লাস্ট ক্লোজড ক্যান্ডেল পয়েন্ট ফিল্টার (-2)
     p = -2
     
-    # আপনার অরিজিনাল বাই এবং সেল ট্রিগার কন্ডিশন
+    # আপনার কাস্টম কন্ডিশন
     buy_condition = (df['ema_fast'].iloc[p-1] <= df['ema_slow'].iloc[p-1]) and \
                     (df['ema_fast'].iloc[p] > df['ema_slow'].iloc[p]) and \
                     (df['close'].iloc[p] > df['high_signal'].iloc[p-1])
@@ -54,44 +52,41 @@ def process_gold_indicators(df):
     sell_condition = (df['ema_fast'].iloc[p-1] >= df['ema_slow'].iloc[p-1]) and \
                      (df['ema_fast'].iloc[p] < df['ema_slow'].iloc[p]) and \
                      (df['close'].iloc[p] < df['low_signal'].iloc[p-1])
-    
-    # ব্রেকআউট প্রাইসকে এন্ট্রি ধরে TP/SL ক্যালকুলেশন
+                     
     if buy_condition:
-        entry = df['high_signal'].iloc[p-1]  # আপনার ফিক্স করা এক্সাক্ট ব্রেকআউট এন্ট্রি প্রাইস
+        entry = df['high_signal'].iloc[p-1] # ফিক্সড রিয়েল এন্ট্রি লেভেল
         sl = entry - (df['atr'].iloc[p] * 1.5)
         tp = entry + (df['atr'].iloc[p] * 2.0)
         send_telegram_alert("BUY", entry, sl, tp)
         
     elif sell_condition:
-        entry = df['low_signal'].iloc[p-1]   # আপনার ফিক্স করা এক্সাক্ট ব্রেকআউট এন্ট্রি প্রাইস
+        entry = df['low_signal'].iloc[p-1] # ফিক্সড রিয়েল এন্ট্রি লেভেল
         sl = entry + (df['atr'].iloc[p] * 1.5)
         tp = entry - (df['atr'].iloc[p] * 2.0)
         send_telegram_alert("SELL", entry, sl, tp)
 
-class RenderServerHandler(BaseHTTPRequestHandler):
+class WebServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # সাইটে ভিজিট করলে যেন ফ্রন্টএন্ড ড্যাশবোর্ড চার্ট দেখায়
         try:
             with open("index.html", "r", encoding="utf-8") as f:
-                html_content = f.read()
+                content = f.read()
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            self.wfile.write(html_content.encode("utf-8"))
+            self.wfile.write(content.encode("utf-8"))
         except Exception as e:
             self.send_response(500)
             self.end_headers()
-            self.wfile.write(f"Server Error: {e}".encode())
+            self.wfile.write(f"Error: {e}".encode())
 
     def do_POST(self):
-        # লাইভ ডাটা সোর্স বা ব্রোকার API থেকে ক্যান্ডেল ডাটা রিসিভ করার এন্ডপয়েন্ট
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length).decode('utf-8')
         try:
             json_data = json.loads(post_data)
             if "candles" in json_data:
                 df = pd.DataFrame(json_data["candles"])
-                process_gold_indicators(df)
+                run_gold_logic(df)
             self.send_response(200)
             self.end_headers()
         except:
@@ -100,5 +95,4 @@ class RenderServerHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    print(f"Server Running Auto-Scanner on Port {port}...")
-    HTTPServer(('0.0.0.0', port), RenderServerHandler).serve_forever()
+    HTTPServer(('0.0.0.0', port), WebServerHandler).serve_forever()
