@@ -21,52 +21,22 @@
         <div class="credit">🔴 LIVE MONITORING PANEL | DEVELOPER: DARK-X-RAYHAN</div>
     </header>
     <div class="chart-container">
-        <div class="chart-box">
-            <div id="tv_chart_3m" class="tv-widget"></div>
-        </div>
-        <div class="chart-box">
-            <div id="tv_chart_5m" class="tv-widget"></div>
-        </div>
+        <div class="chart-box"><div id="tv_chart_3m" class="tv-widget"></div></div>
+        <div class="chart-box"><div id="tv_chart_5m" class="tv-widget"></div></div>
     </div>
-
     <script type="text/javascript">
-        // আপনার অরিজিং ইন্ডিকেটরের মূল ম্যাথমেটিক্যাল স্টাডিজ (EMA 20, EMA 50 এবং 10 পিরিয়ড চ্যানেল)
         const goldSMCStudies = [
             { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
             { id: "MAExp@tv-basicstudies", inputs: { length: 50 } },
             { id: "PriceChannel@tv-basicstudies", inputs: { length: 10 } }
         ];
-
-        // 3 Minute Live Chart
         new TradingView.widget({
-            "container_id": "tv_chart_3m",
-            "autosize": true,
-            "symbol": "FX:XAUUSD",
-            "interval": "3",
-            "timezone": "Etc/UTC",
-            "theme": "dark",
-            "style": "1",
-            "locale": "en",
-            "enable_publishing": false,
-            "hide_side_toolbar": false,
-            "allow_symbol_change": true,
-            "studies": goldSMCStudies
+            "container_id": "tv_chart_3m", "autosize": true, "symbol": "FX:XAUUSD", "interval": "3",
+            "timezone": "Etc/UTC", "theme": "dark", "style": "1", "locale": "en", "studies": goldSMCStudies
         });
-
-        // 5 Minute Live Chart
         new TradingView.widget({
-            "container_id": "tv_chart_5m",
-            "autosize": true,
-            "symbol": "FX:XAUUSD",
-            "interval": "5",
-            "timezone": "Etc/UTC",
-            "theme": "dark",
-            "style": "1",
-            "locale": "en",
-            "enable_publishing": false,
-            "hide_side_toolbar": false,
-            "allow_symbol_change": true,
-            "studies": goldSMCStudies
+            "container_id": "tv_chart_5m", "autosize": true, "symbol": "FX:XAUUSD", "interval": "5",
+            "timezone": "Etc/UTC", "theme": "dark", "style": "1", "locale": "en", "studies": goldSMCStudies
         });
     </script>
 </body>
