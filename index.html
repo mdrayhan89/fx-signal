@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -11,8 +11,8 @@
         h1 { margin: 0; color: #ffb703; font-size: 22px; letter-spacing: 1px; }
         .credit { color: #00b4d8; font-weight: bold; font-size: 14px; margin-top: 5px; }
         
-        .main-container { display: flex; gap: 15px; margin-top: 15px; height: calc(100vh - 100px); }
-        .chart-container { flex: 3; border: 2px solid #1e222d; background: #131722; border-radius: 8px; overflow: hidden; position: relative; }
+        .main-container { display: flex; gap: 15px; margin-top: 15px; height: calc(100vh - 110px); }
+        .chart-container { flex: 3; border: 2px solid #1e222d; background: #131722; border-radius: 8px; overflow: hidden; position: relative; min-height: 400px; }
         #live_chart { width: 100%; height: 100%; }
         
         .signal-panel { flex: 1; border: 2px solid #1e222d; background: #131722; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; }
@@ -24,6 +24,7 @@
         .buy-text { color: #26a69a; }
         .sell-text { color: #ef5350; }
         .card-body { font-size: 14px; line-height: 1.6; font-family: monospace; }
+        .time-text { font-size: 11px; color: #787b86; text-align: right; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -40,22 +41,23 @@
         <div class="signal-panel">
             <div class="panel-title">⚡ LIVE AI SIGNALS</div>
             <div id="signals_container">
-                <div style="text-align: center; color: #787b86; margin-top: 50px;">Analyzing Live Market Feed...</div>
+                <div style="text-align: center; color: #787b86; margin-top: 50px;">Connecting to Gold Market Engine...</div>
             </div>
         </div>
     </div>
 
     <script>
-        // চার্ট তৈরি ও কনফিগারেশন
         const chartContainer = document.getElementById('live_chart');
+        
+        // চার্ট ক্যানভাস তৈরি
         const chart = LightweightCharts.createChart(chartContainer, {
-            width: chartContainer.clientWidth,
-            height: chartContainer.clientHeight,
+            width: chartContainer.offsetWidth,
+            height: chartContainer.offsetHeight || 500,
             layout: { backgroundColor: '#131722', textColor: '#d1d4dc' },
-            grid: { vertLines: { color: 'rgba(42, 46, 57, 0.5)' }, horzLines: { color: 'rgba(42, 46, 57, 0.5)' } },
+            grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
             crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-            rightPriceScale: { borderColor: 'rgba(197, 203, 206, 0.8)' },
-            timeScale: { borderColor: 'rgba(197, 203, 206, 0.8)', timeVisible: true, secondsVisible: false }
+            rightPriceScale: { borderColor: '#2a2e39' },
+            timeScale: { borderColor: '#2a2e39', timeVisible: true }
         });
 
         const candleSeries = chart.addCandlestickSeries({
@@ -63,27 +65,28 @@
             wickUpColor: '#26a69a', wickDownColor: '#ef5350'
         });
 
-        // উইন্ডো রিসাইজ হ্যান্ডলার
-        window.addEventListener('resize', () => {
+        // রেসপন্সিভ সাইজ ফিক্স
+        new ResizeObserver(() => {
             chart.resize(chartContainer.clientWidth, chartContainer.clientHeight);
-        });
+        }).observe(chartContainer);
 
-        // ব্যাকএন্ড থেকে চার্ট ডাটা এবং ইন্ডিকেটর লেবেল একসাথে নিয়ে আসার ফাংশন
         async function updateChartAndSignals() {
             try {
                 const response = await fetch('/get-market-data');
                 if (response.ok) {
                     const data = await response.json();
                     
-                    // ১. ক্যান্ডেলস্টিক চার্ট আপডেট
-                    candleSeries.setData(data.candles);
+                    // ১. চার্টে ক্যান্ডেল লোড করা
+                    if(data.candles && data.candles.length > 0) {
+                        candleSeries.setData(data.candles);
+                    }
                     
-                    // ২. চার্টের ভেতরে সরাসরি কাস্টম ইন্ডিকেটর লেবেল (BUY/SELL) রেন্ডার করা
+                    // ২. চার্টের ভেতরে লাইভ ইন্ডিকেটর লেবেল এবং TP/SL রেন্ডার করা
                     if (data.markers && data.markers.length > 0) {
                         candleSeries.setMarkers(data.markers);
                     }
 
-                    // ৩. ডানপাশের প্যানেল আপডেট
+                    // ৩. ডানপাশের সিগন্যাল প্যানেল আপডেট
                     const container = document.getElementById('signals_container');
                     if (data.signals && data.signals.length > 0) {
                         container.innerHTML = '';
@@ -101,15 +104,15 @@
                                     🛑 <b>SL:</b> $${sig.sl.toFixed(2)}<br>
                                     🎯 <b>TP:</b> $${sig.tp.toFixed(2)}
                                 </div>
+                                <div class="time-text">${sig.time}</div>
                             `;
                             container.appendChild(card);
                         });
                     }
                 }
-            } catch (e) { console.log("Data connection waiting..."); }
+            } catch (e) { console.log("Waiting for backend data..."); }
         }
 
-        // প্রতি ৩ সেকেন্ড পর পর চার্ট ও ইন্ডিকেটর লাইভ রিফ্রেশ হবে
         setInterval(updateChartAndSignals, 3000);
         updateChartAndSignals();
     </script>
