@@ -1,30 +1,57 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GOLD SMC SCANNER - DARK-X-RAYHAN</title>
-    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
-        body { background-color: #0b0e14; color: #ffffff; margin: 0; padding: 10px; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        body { background-color: #0b0e14; color: #ffffff; margin: 0; padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
         header { text-align: center; padding: 10px; border-bottom: 2px solid #1e222d; background: #131722; }
         h1 { margin: 0; color: #ffb703; font-size: 22px; letter-spacing: 1px; }
         .credit { color: #00b4d8; font-weight: bold; font-size: 14px; margin-top: 5px; }
         
         .main-container { display: flex; gap: 15px; margin-top: 15px; height: calc(100vh - 110px); }
-        .chart-container { flex: 3; border: 2px solid #1e222d; background: #131722; border-radius: 8px; overflow: hidden; position: relative; min-height: 400px; }
-        #live_chart { width: 100%; height: 100%; }
+        .charts-section { flex: 3; display: flex; flex-direction: column; gap: 15px; position: relative; }
+        .chart-box { flex: 1; border: 2px solid #1e222d; background: #131722; border-radius: 8px; overflow: hidden; position: relative; }
+        iframe { width: 100%; height: 100%; border: none; }
         
+        /* চার্টের ভেতরের কাস্টম ইন্ডিকেটর বক্স লেয়ার (TradingView Style) */
+        #chart_indicator_layer {
+            position: absolute;
+            top: 20%;
+            left: 30%;
+            z-index: 9999;
+            pointer-events: none; /* চার্ট স্ক্রোল করতে যেন সমস্যা না হয় */
+            display: none; /* সিগন্যাল আসলে এটি অন হবে */
+        }
+        
+        .tv-custom-box {
+            background: #26a69a;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            border-left: 6px solid #1b5e20;
+            line-height: 1.6;
+        }
+        .tv-custom-box.sell {
+            background: #ef5350;
+            border-left-color: #b71c1c;
+        }
+
         .signal-panel { flex: 1; border: 2px solid #1e222d; background: #131722; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; }
         .panel-title { color: #ffb703; font-size: 18px; font-weight: bold; text-align: center; border-bottom: 1px solid #1e222d; padding-bottom: 10px; margin-bottom: 15px; }
         
-        .signal-card { background: #1c2030; border-radius: 6px; padding: 14px; margin-bottom: 12px; border-left: 5px solid #26a69a; }
+        .signal-card { background: #1c2030; border-radius: 6px; padding: 14px; margin-bottom: 12px; border-left: 5px solid #26a69a; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .signal-card.sell { border-left-color: #ef5350; }
-        .card-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; margin-bottom: 8px; }
+        .card-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 16px; margin-bottom: 10px; }
         .buy-text { color: #26a69a; }
         .sell-text { color: #ef5350; }
         .card-body { font-size: 14px; line-height: 1.6; font-family: monospace; }
-        .time-text { font-size: 11px; color: #787b86; text-align: right; margin-top: 5px; }
+        .time-text { font-size: 11px; color: #787b86; text-align: right; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -34,69 +61,55 @@
     </header>
     
     <div class="main-container">
-        <div class="chart-container">
-            <div id="live_chart"></div>
+        <div class="charts-section">
+            <div id="chart_indicator_layer"></div>
+            
+            <div class="chart-box">
+                <iframe src="https://s.tradingview.com/widgetembed/?symbol=FX_IDC%3AXAUUSD&interval=3&theme=dark&style=1&timezone=Etc%2FUTC&studies=%5B%5D"></iframe>
+            </div>
         </div>
         
         <div class="signal-panel">
             <div class="panel-title">⚡ LIVE AI SIGNALS</div>
             <div id="signals_container">
-                <div style="text-align: center; color: #787b86; margin-top: 50px;">Connecting to Gold Market Engine...</div>
+                <div style="text-align: center; color: #787b86; margin-top: 50px;" id="waiting_text">Scanning Live Gold Market Data...</div>
             </div>
         </div>
     </div>
 
     <script>
-        const chartContainer = document.getElementById('live_chart');
-        
-        // চার্ট ক্যানভাস তৈরি
-        const chart = LightweightCharts.createChart(chartContainer, {
-            width: chartContainer.offsetWidth,
-            height: chartContainer.offsetHeight || 500,
-            layout: { backgroundColor: '#131722', textColor: '#d1d4dc' },
-            grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
-            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-            rightPriceScale: { borderColor: '#2a2e39' },
-            timeScale: { borderColor: '#2a2e39', timeVisible: true }
-        });
-
-        const candleSeries = chart.addCandlestickSeries({
-            upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
-            wickUpColor: '#26a69a', wickDownColor: '#ef5350'
-        });
-
-        // রেসপন্সিভ সাইজ ফিক্স
-        new ResizeObserver(() => {
-            chart.resize(chartContainer.clientWidth, chartContainer.clientHeight);
-        }).observe(chartContainer);
-
-        async function updateChartAndSignals() {
+        async function fetchLiveSignals() {
             try {
-                const response = await fetch('/get-market-data');
+                const response = await fetch('/get-signals');
                 if (response.ok) {
-                    const data = await response.json();
-                    
-                    // ১. চার্টে ক্যান্ডেল লোড করা
-                    if(data.candles && data.candles.length > 0) {
-                        candleSeries.setData(data.candles);
-                    }
-                    
-                    // ২. চার্টের ভেতরে লাইভ ইন্ডিকেটর লেবেল এবং TP/SL রেন্ডার করা
-                    if (data.markers && data.markers.length > 0) {
-                        candleSeries.setMarkers(data.markers);
-                    }
-
-                    // ৩. ডানপাশের সিগন্যাল প্যানেল আপডেট
+                    const signals = await response.json();
+                    const layer = document.getElementById('chart_indicator_layer');
                     const container = document.getElementById('signals_container');
-                    if (data.signals && data.signals.length > 0) {
-                        container.innerHTML = '';
-                        data.signals.forEach(sig => {
-                            const isBuy = sig.action === 'BUY';
+                    
+                    if (signals.length > 0) {
+                        // ১. চার্টের ভেতরের লেয়ারে লেটেস্ট সিগন্যাল বক্সটি রেন্ডার করা
+                        const latest = signals[0];
+                        const isBuy = latest.action === 'BUY';
+                        
+                        layer.style.display = 'block';
+                        layer.innerHTML = `
+                            <div class="tv-custom-box ${isBuy ? '' : 'sell'}">
+                                💎 GOLD ${latest.action}<br>
+                                ⚡ Entry: $${latest.entry.toFixed(2)}<br>
+                                🎯 TP: $${latest.tp.toFixed(2)}<br>
+                                🛑 SL: $${latest.sl.toFixed(2)}
+                            </div>
+                        `;
+                        
+                        // ২. ডানপাশের প্যানেল আপডেট করা
+                        container.innerHTML = ''; 
+                        signals.forEach(sig => {
+                            const isSigBuy = sig.action === 'BUY';
                             const card = document.createElement('div');
-                            card.className = `signal-card ${isBuy ? '' : 'sell'}`;
+                            card.className = `signal-card ${isSigBuy ? '' : 'sell'}`;
                             card.innerHTML = `
                                 <div class="card-header">
-                                    <span class="${isBuy ? 'buy-text' : 'sell-text'}">🟢 GOLD ${sig.action}</span>
+                                    <span class="${isSigBuy ? 'buy-text' : 'sell-text'}">🟢 GOLD ${sig.action}</span>
                                     <span>XAUUSD</span>
                                 </div>
                                 <div class="card-body">
@@ -108,13 +121,15 @@
                             `;
                             container.appendChild(card);
                         });
+                    } else {
+                        layer.style.display = 'none';
                     }
                 }
-            } catch (e) { console.log("Waiting for backend data..."); }
+            } catch (e) { console.log("Waiting for backend responses..."); }
         }
-
-        setInterval(updateChartAndSignals, 3000);
-        updateChartAndSignals();
+        // প্রতি ৩ সেকেন্ড পর পর চেক করবে
+        setInterval(fetchLiveSignals, 3000);
+        fetchLiveSignals();
     </script>
 </body>
 </html>
