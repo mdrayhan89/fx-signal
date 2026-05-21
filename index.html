@@ -30,14 +30,14 @@
     </div>
 
     <script type="text/javascript">
-        // আপনার অরিজিনাল ইন্ডিকেটর লজিকের ডিফল্ট স্টাডিজ (EMA 20, EMA 50 এবং 10 পিরিয়ড Price Channel)
+        // আপনার অরিজিং ইন্ডিকেটরের মূল ম্যাথমেটিক্যাল স্টাডিজ (EMA 20, EMA 50 এবং 10 পিরিয়ড চ্যানেল)
         const goldSMCStudies = [
             { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
             { id: "MAExp@tv-basicstudies", inputs: { length: 50 } },
             { id: "PriceChannel@tv-basicstudies", inputs: { length: 10 } }
         ];
 
-        // 3 Minute Live Gold Chart
+        // 3 Minute Live Chart
         new TradingView.widget({
             "container_id": "tv_chart_3m",
             "autosize": true,
@@ -53,7 +53,7 @@
             "studies": goldSMCStudies
         });
 
-        // 5 Minute Live Gold Chart
+        // 5 Minute Live Chart
         new TradingView.widget({
             "container_id": "tv_chart_5m",
             "autosize": true,
